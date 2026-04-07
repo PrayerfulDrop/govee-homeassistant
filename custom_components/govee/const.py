@@ -55,3 +55,16 @@ SUFFIX_HEATER_TEMPERATURE: Final = "_heater_temperature"
 SUFFIX_HEATER_FAN_SPEED: Final = "_heater_fan_speed"
 SUFFIX_HEATER_AUTO_STOP: Final = "_heater_auto_stop"
 SUFFIX_PURIFIER_MODE_SELECT: Final = "_purifier_mode_select"
+
+# -- BLE device support --
+
+# Distinguishes cloud entries from BLE-direct entries in config data
+CONF_CONNECTION_TYPE: Final = "connection_type"
+CONNECTION_TYPE_CLOUD: Final = "cloud"
+CONNECTION_TYPE_BLE: Final = "ble"
+
+# BLE device config keys (stored in config entry data for BLE entries)
+CONF_BLE_SEGMENTED: Final = "ble_segmented"
+
+# BLE advertising name prefixes used for Bluetooth discovery
+BLE_DISCOVERY_NAMES: Final[tuple[str, ...]] = ("Govee_", "ihoment_", "GBK_")

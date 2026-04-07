@@ -44,6 +44,8 @@ from .const import (
 )
 from .coordinator import GoveeCoordinator
 from .services import async_setup_services, async_unload_services
+from .coordinator_ble import GoveeBLECoordinator
+from .const import CONF_CONNECTION_TYPE, CONNECTION_TYPE_BLE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +64,28 @@ PLATFORMS: list[Platform] = [
 # Type alias for runtime data
 type GoveeConfigEntry = ConfigEntry[GoveeCoordinator]
 
+_BLE_PLATFORMS: list[Platform] = [Platform.LIGHT]
+
+
+async def _async_setup_ble_entry(
+    hass: HomeAssistant, entry: GoveeConfigEntry
+) -> bool:
+    """Set up a BLE-direct Govee light entry."""
+    from homeassistant.exceptions import ConfigEntryNotReady
+    from homeassistant.components import bluetooth
+
+    address = entry.data.get("address", "")
+    if not bluetooth.async_ble_device_from_address(hass, address, False):
+        raise ConfigEntryNotReady(
+            f"Could not find Govee BLE device with address {address}"
+        )
+
+    coordinator = GoveeBLECoordinator(hass, entry)
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, _BLE_PLATFORMS)
+    return True
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: GoveeConfigEntry) -> bool:
     """Set up Govee from a config entry.
@@ -78,6 +102,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoveeConfigEntry) -> boo
         ConfigEntryNotReady: Temporary setup failure.
     """
     _LOGGER.info("Setting up Govee integration (entry_id=%s)", entry.entry_id)
+
+    # Route BLE entries to a separate lightweight setup path
+    if entry.data.get(CONF_CONNECTION_TYPE) == CONNECTION_TYPE_BLE:
+        return await _async_setup_ble_entry(hass, entry)
+
     _LOGGER.debug("Entry options: %s", entry.options)
 
     api_key = entry.data[CONF_API_KEY]
@@ -226,6 +255,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: GoveeConfigEntry) -> bo
     Returns:
         True if unload was successful.
     """
+    # BLE entries only loaded LIGHT platform
+    if entry.data.get(CONF_CONNECTION_TYPE) == CONNECTION_TYPE_BLE:
+        return await hass.config_entries.async_unload_platforms(entry, _BLE_PLATFORMS)
+
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 

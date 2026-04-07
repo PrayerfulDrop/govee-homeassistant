@@ -60,6 +60,12 @@ async def async_setup_entry(
     """Set up Govee lights from a config entry."""
     coordinator: GoveeCoordinator = entry.runtime_data
 
+    from .coordinator_ble import GoveeBLECoordinator
+    from .platforms.ble_light import GoveeBLELightEntity
+    if isinstance(coordinator, GoveeBLECoordinator):
+        async_add_entities([GoveeBLELightEntity(coordinator)])
+        return
+
     entities: list[LightEntity] = []
 
     # Get per-device segment modes

@@ -11,12 +11,17 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.bluetooth import (
+    BluetoothServiceInfoBleak,
+    async_discovered_service_info,
+)
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
 )
+from homeassistant.const import CONF_ADDRESS, CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
@@ -99,12 +104,54 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
         self._password: str | None = None
         self._client_id: str | None = None
         self._iot_credentials: GoveeIotCredentials | None = None
+        self._ble_discovery_info = None
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Get the options flow for this handler."""
         return GoveeOptionsFlow(config_entry)
+
+    async def async_step_bluetooth(
+        self, discovery_info: BluetoothServiceInfoBleak
+    ) -> ConfigFlowResult:
+        """Handle Bluetooth discovery of a Govee BLE device."""
+        await self.async_set_unique_id(discovery_info.address)
+        self._abort_if_unique_id_configured()
+        self._ble_discovery_info = discovery_info
+        self.context["title_placeholders"] = {"name": discovery_info.name}
+        return await self.async_step_bluetooth_confirm()
+
+    async def async_step_bluetooth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm BLE device discovery and ask about segmented mode."""
+        assert hasattr(self, "_ble_discovery_info"), "No BLE discovery info"
+        info = self._ble_discovery_info
+
+        if user_input is not None:
+            from .const import (
+                CONF_BLE_SEGMENTED,
+                CONF_CONNECTION_TYPE,
+                CONNECTION_TYPE_BLE,
+            )
+            from homeassistant.const import CONF_ADDRESS, CONF_NAME
+
+            return self.async_create_entry(
+                title=info.name,
+                data={
+                    CONF_CONNECTION_TYPE: CONNECTION_TYPE_BLE,
+                    CONF_ADDRESS: info.address.upper(),
+                    CONF_NAME: info.name,
+                    CONF_BLE_SEGMENTED: user_input["segmented"],
+                },
+            )
+
+        return self.async_show_form(
+            step_id="bluetooth_confirm",
+            data_schema=vol.Schema({vol.Required("segmented", default=True): bool}),
+            description_placeholders={"name": info.name, "address": info.address},
+        )
 
     async def async_step_user(
         self,
